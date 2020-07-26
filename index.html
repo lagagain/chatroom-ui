@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Chat Room UI</title>
+        <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+        <script src="./chat-room.js" defer></script>
+        <link href="./chat-room.css" rel="stylesheet"/>
+    </head>
+    <body>
+        <div id="chat-room-app">
+            <div class="chat-room">
+                <div class="chat-header">
+                    <img class="chat-thumb" alt="" :src="thumb"/>
+                    <div class="chat-namm">{{ chat_name }}</div>
+                    <div class="chat-room-items">
+                        <button class="chat-close">X</button>
+                    </div>
+                </div>
+                <div class="chat-body">
+                    <div v-for="floor in floors">
+                        <div class="floor" :class="floor.show">
+                            <img class="avatar" :src="floor.avatar" >
+                            <div class="messeng-box">
+                                <div class="messeng"> {{ floor.messeng }} </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="chat-footer">
+                    <div class="input-box">
+                        <input name="" v-model="messeng" type="text" value="" placeholder="input messeng" />
+                    </div>
+                    <img alt="" class="send-btn" @click="sendMesseng" src="./assets/send-message.svg"/>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>
