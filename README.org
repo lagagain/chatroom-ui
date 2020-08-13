@@ -1,0 +1,222 @@
+#+author: lagagain
+#+title: 聊天軟體設計
+* 聊天軟體設計
+* 伺服器
+** 類別圖
+ #+begin_src plantuml :file doc/class.png
+   class logined_user{
+           session_id: long integer // uuid
+           account: account     // **allow null**
+           identify_by: identify_type // how identified
+           name: string            // nick name
+           DM: dm_type             // allow DM
+           channels: channel[]    // joined channels
+   }
+
+   logined_user *--> identify_type
+   logined_user *--> dm_type
+   logined_user o--> account
+   logined_user o-> channel
+
+   note bottom of logined_user
+           `identify`, `dm_type` can use mask,
+           like `identify_type.PASSWD & identify_type.GOOGLE`
+   end note
+
+   enum identify_type{
+           GUEST = 0
+           PASSWD = 1
+           GOOGLE = 2
+           TOTP = 4
+   }
+
+   enum dm_type{
+           NO = 0            // not allow DM
+           DM = 1            // allow DM
+           CHANNAL = 2       // only allow from joined channels
+           REGISTED = 4      // only Registed users can DM me
+           FRIEND = 8        // only Friends can DM me
+   }
+
+   class account{
+           id: long integer //uuid
+           nick: string             // default nick name
+           passwd: string // **crypt**
+           email: string // email format
+           avatar: string // image url
+           sessions: logined_user[]
+   }
+
+   account o--> logined_user
+
+   class channel{
+           id: long integer // uuid
+           name: string
+           type: channel_type
+           passwd: string
+           descript: string
+           thumb: string // image url
+           members: logined_user[]
+           history: messeng[]
+           max_members: integer // 0 = unlimited
+   }
+
+   channel *-> channel_type
+   channel *-> logined_user
+   channel o--> messeng
+
+   class messeng{
+           type: messeng_type
+           messeng: buffer  // buffer or string
+           from_user: string // user name
+           from_user_id: long integer // logined_user id
+           avatar: string // image ul
+   }
+
+   enum messeng_type{
+           TEXT
+           IMAGE
+           IMAGE_URL
+   }
+
+   enum channel_type{
+           PUBLIC
+           PASSWD
+           INVITED
+           REGISTED
+   }
+
+
+ #+end_src
+
+ #+RESULTS:
+ [[file:doc/class.png]]
+
+** 登入流程
+
+#+begin_src plantuml :file doc/login_flow.png
+
+  logined_user -> "identify server": login
+  return logined success
+
+  logined_user -> "chatroom server": join chennel
+  "chatroom server" ->  "identify server": check identify
+  return identified
+  "chatroom server" -> logined_user : joined success
+
+
+  loop
+          logined_user -> "chatroom server": send message
+          return  received message
+  end
+
+  logined_user -> "chatroom server": leave channel
+
+  logined_user -> "identify server": logout
+  "identify server" -> "chatroom server": user logout
+
+#+end_src
+
+#+RESULTS:
+[[file:doc/login_flow.png]]
+
+
+*** event for client
+
+- connected
+- created chennel
+- broadcast(recevied)
+- joined -> success, fail -> listen messeng for the channel
+- received message from special channel
+- received DM
+
+*** method
+- join a channel
+- send messeng to channel
+- DM
+
+
+
+** User Case
+
+*** logined_user
+#+begin_src plantuml :file doc/logined_user_usecase.png
+  :logined_user: --> (login)
+  :logined_user: --> (change nick name)
+  :logined_user: --> (logout)
+  :logined_user: --> (join channel)
+  :logined_user: --> (leave channel)
+  :logined_user: --> (send message to a channel)
+  :logined_user: --> (DM other user)
+
+  :logined_user: <- (received message from channel)
+  :logined_user: <- (received DM)
+
+  (create a channel) <- :logined_user:
+#+end_src
+
+#+RESULTS:
+[[file:doc/logined_user_usecase.png]]
+
+** Messeng Process
+#+begin_src plantuml :file doc/messeng_process.png
+
+  start
+
+  :join channel;
+  if (allow join ?) then (yes)
+          while (alive?) is (yes)
+                  if(recived new message ?) then (yes)
+                  :received new message;
+                  :broadcast to channel;
+                  endif
+          endwhile (dead)
+  else(no)
+          end
+  endif
+
+  end
+#+end_src
+
+#+RESULTS:
+[[file:doc/messeng_process.png]]
+
+
+** Join Chatroom 虛擬碼
+
+#+begin_src js
+  var session = new Session(); // logined_user
+
+  on("join channel") -> function(request, channel_id){
+      let session = request.session;
+      let channel = getChannelByID(channel_id);
+      let type = channel.type;
+      switch(channel.type){
+      case channel_type.PUBLIC:
+          return "joined";
+      case channel_type.PASSWD:
+          if(request.passwd? == channel.passwd){
+              return "joined";
+          }
+          return "fail";
+      case channel_type.INVITED:
+          if(request.invited && checkInvited(request.invited)){
+              return "joined";
+          }
+          return "fail";
+      case channel_type.REGISTED:
+          if(session.account){ // auth
+              return "joined";
+          }else{
+              return "fail";
+          }
+      default:
+          throw "unknow channel type"
+      }
+  }
+
+  on("new message") -> function(channel, new_message){
+      channel.emit(new_message); //broadcast
+  }
+
+#+end_src
